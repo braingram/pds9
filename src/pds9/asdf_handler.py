@@ -1,7 +1,7 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
-from collections.abc import Collection, Mapping
 from contextlib import redirect_stdout
 from io import StringIO
+import re
 
 import asdf
 import gwcs
@@ -42,7 +42,10 @@ class AsdfHandler:
     def browse_images(self, selection):
         filename, _apath = self.split_selection(selection)
         af = self._open(filename)
-        pathlists = self._search_tree(af)
+        results = af.search(
+            filter_=lambda node: isinstance(node, NDArrayType) and node.ndim > 1 and node.size > 1000
+        )
+        pathlists = self._pathlists_from_search_results(results)
         return self._process_path_lists(pathlists)
 
     def render_header_text(self, selection, *, omit=True):
@@ -172,42 +175,24 @@ class AsdfHandler:
         fitswcs = node.to_fits_sip(degree=5, max_inv_pix_error=None, npoints=10)
         return self._fixwcs(fitswcs)
 
-    def _callsearch(self, pathlist, nodeitem, index, af, path, min_nelements):
-        spath = path.copy()
-        spath.append(index)
-        sresult = self._search_tree(af, nodeitem[index], spath, min_nelements)
-        if sresult is not None:
-            if isinstance(sresult, Mapping):
-                pathlist.append(sresult)
+    def _normalize_search_path(self, path):
+        path = path.removeprefix("root")
+        parts = []
+        for match in re.finditer(r"\['([^']+)'\]|\[(\d+)\]", path):
+            key, index = match.groups()
+            if key is not None:
+                parts.append(key)
             else:
-                pathlist += sresult
+                parts.append(int(index))
+        return parts
 
-    def _search_tree(self, af, tree=None, path=None, min_nelements=1000):
-        if tree is None:
-            tree = af.tree
-        if path is None:
-            path = []
-        pathlist = []
-        if isinstance(tree, np.ndarray | NDArrayType):
-            lazyim = tree if isinstance(tree, np.ndarray) else tagged_tree_to_custom_tree(tree, af)
-            if len(lazyim.shape) < 2:
-                return None
-            nelements = np.prod(lazyim.shape)
-            if nelements < min_nelements:
-                return None
-            if lazyim.dtype is complex:
-                return None
-            iminfo = (lazyim.dtype, lazyim.shape)
-            return {"path": path, "iminfo": iminfo}
-        if isinstance(tree, Mapping):
-            for key in tree:
-                self._callsearch(pathlist, tree, key, af, path, min_nelements)
-        elif (
-            isinstance(tree, Collection)
-            and not isinstance(tree, Mapping | str | bytes | bytearray)
-        ):
-            for i, _item in enumerate(tree):
-                self._callsearch(pathlist, tree, i, af, path, min_nelements)
-        if pathlist:
-            return pathlist
-        return None
+    def _pathlists_from_search_results(self, results):
+        pathlists = []
+        for raw_path, node in zip(results.paths, results.nodes, strict=True):
+            pathlists.append(
+                {
+                    "path": self._normalize_search_path(raw_path),
+                    "iminfo": (node.dtype, node.shape),
+                }
+            )
+        return pathlists

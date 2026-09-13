@@ -77,6 +77,15 @@ def test_convert_path_list_formats_ds9_path():
 
 
 
+def test_normalize_search_path_converts_asdf_search_format():
+    handler = AsdfHandler()
+
+    result = handler._normalize_search_path("root['moredata']['images'][2]")
+
+    assert result == ["moredata", "images", 2]
+
+
+
 def test_process_path_lists_returns_parallel_lists():
     handler = AsdfHandler()
 

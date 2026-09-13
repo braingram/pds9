@@ -1,5 +1,5 @@
 import sys
 
-import pds9.plugin
+from pds9.ui import main
 
-sys.exit(pds9.plugin.main())
+sys.exit(main())

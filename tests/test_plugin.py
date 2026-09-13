@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from pds9 import plugin
+from pds9 import tempfiles, ui
+from pds9.asdf_paths import convert_path_list, parse_filename, process_path_lists
 
 
 def test_parse_filename_parses_attribute_and_index_path():
-    result = plugin.parse_filename("example.asdf:roman.data[2].sci")
+    result = parse_filename("example.asdf:roman.data[2].sci")
 
     assert result == (
         "example.asdf",
@@ -12,21 +13,22 @@ def test_parse_filename_parses_attribute_and_index_path():
     )
 
 
+
 def test_parse_filename_supports_path_starting_with_index():
-    result = plugin.parse_filename("example.asdf:[0].data")
+    result = parse_filename("example.asdf:[0].data")
 
     assert result == ("example.asdf", [("i", 0), ("a", "data")])
+
 
 
 def test_parse_filename_reports_missing_closing_bracket(monkeypatch):
     errors = []
     monkeypatch.setattr(
-        plugin.messagebox,
-        "showerror",
+        "pds9.asdf_paths.messagebox.showerror",
         lambda title, message: errors.append((title, message)),
     )
 
-    result = plugin.parse_filename("example.asdf:data[12")
+    result = parse_filename("example.asdf:data[12")
 
     assert result is None
     assert errors == [
@@ -34,15 +36,15 @@ def test_parse_filename_reports_missing_closing_bracket(monkeypatch):
     ]
 
 
+
 def test_parse_filename_reports_non_integer_index(monkeypatch):
     errors = []
     monkeypatch.setattr(
-        plugin.messagebox,
-        "showerror",
+        "pds9.asdf_paths.messagebox.showerror",
         lambda title, message: errors.append((title, message)),
     )
 
-    result = plugin.parse_filename("example.asdf:data[abc]")
+    result = parse_filename("example.asdf:data[abc]")
 
     assert result is None
     assert errors == [
@@ -50,8 +52,9 @@ def test_parse_filename_reports_non_integer_index(monkeypatch):
     ]
 
 
+
 def test_convert_path_list_formats_ds9_path():
-    path, shape = plugin.convert_path_list(
+    path, shape = convert_path_list(
         {"path": ["roman", "data", 2, "sci"], "iminfo": ("float32", (10, 20))}
     )
 
@@ -59,8 +62,9 @@ def test_convert_path_list_formats_ds9_path():
     assert shape == "(10, 20)"
 
 
+
 def test_process_path_lists_returns_parallel_lists():
-    paths, shapes = plugin.process_path_lists(
+    paths, shapes = process_path_lists(
         [
             {"path": ["images", 0], "iminfo": ("int16", (32, 32))},
             {"path": ["roman", "data"], "iminfo": ("float32", (64, 16))},
@@ -71,20 +75,22 @@ def test_process_path_lists_returns_parallel_lists():
     assert shapes == ["(32, 32)", "(64, 16)"]
 
 
+
 def test_remove_terminal_markup_strips_known_escape_sequences():
     text = "prefix\x1b[0m mid\x1b[1m more\x1b[2m end\x1b[3m"
 
-    assert plugin.remove_terminal_markup(text) == "prefix mid more end"
+    assert ui.remove_terminal_markup(text) == "prefix mid more end"
+
 
 
 def test_create_ds9_tmpfile_name_uses_basename_and_preserves_ds9cmd(monkeypatch, tmp_path):
-    monkeypatch.setattr(plugin, "DS9TMP", tmp_path)
+    monkeypatch.setattr(tempfiles, "DS9TMP", tmp_path)
     removable = tmp_path / "old.arr"
     removable.write_text("old")
     keep = tmp_path / "ds9cmd"
     keep.write_text("raise\n")
 
-    tmp_filename = plugin.create_ds9_tmpfile_name("/data/example[2].asdf")
+    tmp_filename = tempfiles.create_ds9_tmpfile_name("/data/example[2].asdf")
 
     assert tmp_filename == str((tmp_path / "example(2).asdf").resolve())
     assert not removable.exists()

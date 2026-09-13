@@ -1,6 +1,5 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
-from tkinter import messagebox
-
+from pds9.errors import PathSyntaxError
 
 
 def parse_filename(filename):
@@ -31,16 +30,14 @@ def parse_filename(filename):
         if apath[index] == "[":
             endind = apath.find("]", index + 1)
             if endind < 0:
-                messagebox.showerror("Path Syntax Error",
-                    "matching end of index ']' not found")
-                return None
+                raise PathSyntaxError("matching end of index ']' not found")
             indexstr = apath[index + 1:endind]
             try:
                 alist.append(("i", int(indexstr)))
-            except ValueError:
-                messagebox.showerror("Path Syntax Error",
-                    f"Index must be an integer instead of {indexstr}")
-                return None
+            except ValueError as err:
+                raise PathSyntaxError(
+                    f"Index must be an integer instead of {indexstr}"
+                ) from err
             index = endind + 1
             continue
 
@@ -48,9 +45,7 @@ def parse_filename(filename):
         while index < len(apath) and apath[index] not in ".[":
             index += 1
         if start == index:
-            messagebox.showerror("Path Syntax Error",
-                "Expected path delimiters: '.'' or '[' not found")
-            return None
+            raise PathSyntaxError("Expected path delimiters: '.'' or '[' not found")
         alist.append(("a", apath[start:index]))
 
     return fn, alist

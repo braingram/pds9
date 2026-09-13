@@ -1,28 +1,23 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 import asdf
 import numpy as np
-from tkinter import messagebox
 
 from asdf.tagged import TaggedDict, TaggedList
 from asdf.yamlutil import tagged_tree_to_custom_tree
 
 from pds9.asdf_paths import parse_filename
+from pds9.errors import AsdfArrayError, AsdfFileNotFoundError, AsdfPathError
 
 
 
 def get_asdf_image(asdfpath):
 
-    retval = parse_filename(asdfpath)
-    if retval is not None:
-        fn, alist = retval
-    else:
-        return None
+    fn, alist = parse_filename(asdfpath)
     # Must load in raw format to make the entire structure easily searchable
     try:
         af = asdf.open(fn, _force_raw_types=True)
-    except FileNotFoundError:
-        messagebox.showerror("File not Found", f"File {fn} not found")
-        return None
+    except FileNotFoundError as err:
+        raise AsdfFileNotFoundError(f"File {fn} not found") from err
     # Extract the referenced array
     node = af.tree
     im = extract_asdf_array(node, alist, af)
@@ -41,20 +36,19 @@ def extract_asdf_array(tree, apath, ctx):
         if ptype == "a":
             try:
                 node = node.data[value] if type(node) is TaggedDict else node[value]
-            except KeyError:
-                messagebox.showerror("ASDF Path Error",
-                    f"Specified ADSF path component '{value}' not in file")
-                return None
+            except KeyError as err:
+                raise AsdfPathError(
+                    f"Specified ADSF path component '{value}' not in file"
+                ) from err
         elif ptype == "i":
             try:
                 node = node.data[value] if type(node) is TaggedList else node[value]
-            except KeyError:
-                messagebox.showerror("ASDF Path Error",
-                    f"Specified ASDF index component '{value}' not in file")
-                return None
+            except KeyError as err:
+                raise AsdfPathError(
+                    f"Specified ASDF index component '{value}' not in file"
+                ) from err
     if not node._tag.startswith("tag:stsci.edu:asdf/core/ndarray-"):  # noqa: SLF001
-        messagebox.showerror("Given ADSF path does not correspond to an array")
-        return None
+        raise AsdfArrayError("Given ADSF path does not correspond to an array")
     return tagged_tree_to_custom_tree(node, ctx)._make_array()  # noqa: SLF001
 
 
@@ -87,10 +81,10 @@ def extract_gwcs(tree, ctx):
         if ptype == "a":
             try:
                 node = node[value]
-            except KeyError:
-                messagebox.showerror("ASDF Path Error",
-                          f"Specified ADSF path component '{value}' not in file")
-                return None
+            except KeyError as err:
+                raise AsdfPathError(
+                    f"Specified ADSF path component '{value}' not in file"
+                ) from err
     gwcs = node
     gwcs = tagged_tree_to_custom_tree(gwcs, ctx)
     fitswcs = gwcs.to_fits_sip(degree=5, max_inv_pix_error=None, npoints=10)

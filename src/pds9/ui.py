@@ -11,6 +11,7 @@ import ds9samp
 import psutil
 
 from pds9.asdf_extract import get_asdf_image, search_tree
+from pds9.errors import Pds9Error
 from pds9.asdf_paths import process_path_lists
 from pds9.ds9_transport import asdf_send_array
 from pds9 import tempfiles
@@ -113,8 +114,10 @@ class AsdfEvents:
             self.show_header_button.config(state=tk.DISABLED)
             return
         if ":" in filepath:
-            im,  fitswcs = get_asdf_image(filepath)
-            if im is None:
+            try:
+                im,  fitswcs = get_asdf_image(filepath)
+            except Pds9Error as err:
+                messagebox.showerror(err.title, err.message)
                 return
         else:
             return

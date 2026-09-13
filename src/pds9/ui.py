@@ -9,9 +9,57 @@ import ds9samp
 import psutil
 
 from pds9 import tempfiles
-from pds9.asdf_handler import AsdfHandler, FILEPATH_DOC
+from pds9.asdf_handler import AsdfHandler
 from pds9.ds9_transport import asdf_send_array
 from pds9.errors import Pds9Error
+
+FILEPATH_DOC = """
+How to specify ASDF images for DS9
+
+The first part of specifying an ADSF image is to specify
+the path to an ASDF file, as one might expect. This can
+be an absolute path or a path relative to the current
+directory that ds9 has (normally the directory that ds9
+was started from).
+
+That alone isn't sufficient since there is not a standard
+place within the file that the image may be located. (We
+intend to provide mechanisms for presuming default
+locations for variousdata types, but these do not exist
+yet). Thus currently it is required to specify the
+location of the image to be displayed.
+
+Since the ASDF file is generally a tree structure, this
+involves specifying the path from the base of the tree
+to the image. There are two types of specifications, by
+attribute name, or by an integer index depending on the
+type of the nested structure (e.g., whether it is of a
+dictionary type, or a list). The attribute names
+(or keys, if you wish) are separated by periods.
+Indices into lists use square brackets, i.e., '[]' and
+do not need periods when adjacent to any other path
+specifier, whether index or attribute.
+
+So supposing the file is in the directory above the
+default for ds9, then a more complex example would be:
+
+../mydata.asdf:detector1.data.timeseries[7]image
+
+Note the ':' separator between the file path and the
+ADSF path.
+
+Because ds9 uses square brackets as part of its mechanism
+to load array data, the temporary file created replaces
+the square brackets with parentheses when displayed in
+its info section for the filename.
+
+Once the file text entry box has a value, and it
+corresponds to an existing file, the "Browse for
+Image" button can be used to list all arrays of dimension
+two or greater in the file, selecting one and pushing
+the load button will append the ASDF object path to the
+file/path specification and load the image.
+"""
 
 
 class AsdfEvents:

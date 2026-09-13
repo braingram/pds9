@@ -16,7 +16,7 @@ def test_set_and_get_current_filename():
 
     handler.set_filename(str(FIXTURE))
 
-    assert handler.current_filename() == str(FIXTURE)
+    assert handler._current_filename() == str(FIXTURE)
 
 
 
@@ -31,7 +31,7 @@ def test_split_selection_returns_filename_and_optional_path():
 def test_parse_filename_parses_attribute_and_index_path():
     handler = AsdfHandler()
 
-    result = handler.parse_filename("example.asdf:roman.data[2].sci")
+    result = handler._parse_filename("example.asdf:roman.data[2].sci")
 
     assert result == (
         "example.asdf",
@@ -43,7 +43,7 @@ def test_parse_filename_parses_attribute_and_index_path():
 def test_parse_filename_supports_path_starting_with_index():
     handler = AsdfHandler()
 
-    result = handler.parse_filename("example.asdf:[0].data")
+    result = handler._parse_filename("example.asdf:[0].data")
 
     assert result == ("example.asdf", [("i", 0), ("a", "data")])
 
@@ -53,7 +53,7 @@ def test_parse_filename_reports_missing_closing_bracket():
     handler = AsdfHandler()
 
     with pytest.raises(PathSyntaxError, match=r"matching end of index '\]' not found"):
-        handler.parse_filename("example.asdf:data[12")
+        handler._parse_filename("example.asdf:data[12")
 
 
 
@@ -61,14 +61,14 @@ def test_parse_filename_reports_non_integer_index():
     handler = AsdfHandler()
 
     with pytest.raises(PathSyntaxError, match="Index must be an integer instead of abc"):
-        handler.parse_filename("example.asdf:data[abc]")
+        handler._parse_filename("example.asdf:data[abc]")
 
 
 
 def test_convert_path_list_formats_ds9_path():
     handler = AsdfHandler()
 
-    path, shape = handler.convert_path_list(
+    path, shape = handler._convert_path_list(
         {"path": ["roman", "data", 2, "sci"], "iminfo": ("float32", (10, 20))}
     )
 
@@ -80,7 +80,7 @@ def test_convert_path_list_formats_ds9_path():
 def test_process_path_lists_returns_parallel_lists():
     handler = AsdfHandler()
 
-    paths, shapes = handler.process_path_lists(
+    paths, shapes = handler._process_path_lists(
         [
             {"path": ["images", 0], "iminfo": ("int16", (32, 32))},
             {"path": ["roman", "data"], "iminfo": ("float32", (64, 16))},
@@ -95,7 +95,7 @@ def test_process_path_lists_returns_parallel_lists():
 def test_open_and_close_fixture_file():
     handler = AsdfHandler()
 
-    af = handler.open(str(FIXTURE))
+    af = handler._open(str(FIXTURE))
     try:
         assert af.tree["desc"] == "top of the tree"
         assert handler.af is af
@@ -121,10 +121,10 @@ def test_get_asdf_image_extracts_array_from_open_file_path():
 
 def test_extract_asdf_array_raises_for_missing_path_component():
     handler = AsdfHandler()
-    af = handler.open(str(FIXTURE))
+    af = handler._open(str(FIXTURE))
     try:
         with pytest.raises(AsdfPathError, match="Specified ADSF path component 'missing' not in file"):
-            handler.extract_asdf_array(af, [("a", "missing")])
+            handler._extract_asdf_array(af, [("a", "missing")])
     finally:
         handler.close()
 
@@ -163,4 +163,4 @@ def test_remove_terminal_markup_strips_known_escape_sequences():
 
     text = "prefix\x1b[0m mid\x1b[1m more\x1b[2m end\x1b[3m"
 
-    assert handler.remove_terminal_markup(text) == "prefix mid more end"
+    assert handler._remove_terminal_markup(text) == "prefix mid more end"

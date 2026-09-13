@@ -5,64 +5,13 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter.scrolledtext import ScrolledText
 
-import asdf
-import asdf._display as display
 import ds9samp
 import psutil
 
-from pds9.asdf_extract import get_asdf_image, search_tree
-from pds9.errors import Pds9Error
-from pds9.asdf_paths import process_path_lists
-from pds9.ds9_transport import asdf_send_array
 from pds9 import tempfiles
-
-FILEPATH_DOC = """
-How to specify ASDF images for DS9
-
-The first part of specifying an ADSF image is to specify
-the path to an ASDF file, as one might expect. This can
-be an absolute path or a path relative to the current
-directory that ds9 has (normally the directory that ds9
-was started from).
-
-That alone isn't sufficient since there is not a standard
-place within the file that the image may be located. (We
-intend to provide mechanisms for presuming default
-locations for variousdata types, but these do not exist
-yet). Thus currently it is required to specify the
-location of the image to be displayed.
-
-Since the ASDF file is generally a tree structure, this
-involves specifying the path from the base of the tree
-to the image. There are two types of specifications, by
-attribute name, or by an integer index depending on the
-type of the nested structure (e.g., whether it is of a
-dictionary type, or a list). The attribute names
-(or keys, if you wish) are separated by periods.
-Indices into lists use square brackets, i.e., '[]' and
-do not need periods when adjacent to any other path
-specifier, whether index or attribute.
-
-So supposing the file is in the directory above the
-default for ds9, then a more complex example would be:
-
-../mydata.asdf:detector1.data.timeseries[7]image
-
-Note the ':' separator between the file path and the
-ADSF path.
-
-Because ds9 uses square brackets as part of its mechanism
-to load array data, the temporary file created replaces
-the square brackets with parentheses when displayed in
-its info section for the filename.
-
-Once the file text entry box has a value, and it
-corresponds to an existing file, the "Browse for
-Image" button can be used to list all arrays of dimension
-two or greater in the file, selecting one and pushing
-the load button will append the ASDF object path to the
-file/path specification and load the image.
-"""
+from pds9.asdf_handler import AsdfHandler, FILEPATH_DOC
+from pds9.ds9_transport import asdf_send_array
+from pds9.errors import Pds9Error
 
 
 class AsdfEvents:
@@ -75,7 +24,7 @@ class AsdfEvents:
         self.impaths = None
         self.imshapes = None
         self.headers = {} # Holds the header display state for different files. 
-        self.af = None
+        self.asdf_handler = AsdfHandler()
         self.ds9 = ds9samp.start()
         self.ds9.send_array = asdf_send_array.__get__(self.ds9, ds9samp.Connection)
         tk.Label(root, text="asdf filename").grid(row=1)
@@ -115,7 +64,7 @@ class AsdfEvents:
             return
         if ":" in filepath:
             try:
-                im,  fitswcs = get_asdf_image(filepath)
+                im, fitswcs = self.asdf_handler.get_asdf_image(filepath)
             except Pds9Error as err:
                 messagebox.showerror(err.title, err.message)
                 return
@@ -128,41 +77,38 @@ class AsdfEvents:
                 fwcs.write(bytes(fitswcs, "utf-8"))
             self.ds9.set(f"wcs load {wcsfn}")
 
-
     def show_filename_help(self):
         messagebox.showinfo(title="Filename/Image Path Info", message=FILEPATH_DOC)
 
-
     def browse_filename(self):
         filename = filedialog.askopenfilename()
+        self.asdf_handler.set_filename(filename)
         self.entry.delete(0, tk.END)
         self.entry.insert(0, filename)
         self.browse_image_button.config(state=tk.NORMAL)
         self.show_header_button.config(state=tk.NORMAL)
 
     def browse_image(self):
-        filename = self.entry.get()
-        # Discard the image path if it exists
-        filename = filename.split(":")[0]
-        with asdf.open(filename, _force_raw_types=True) as af:
-            self.af = af
-            pathlists = search_tree(af.tree, af)
-            imbrow = tk.Toplevel(self.root)
-            imbrow.wm_title("ASDF Image Browser")
-            imlist = tk.Listbox(imbrow, width=60, height=20)
-            imlist.pack(side="top", fill="both", expand=True, padx=10, pady=10)
-            button_load = tk.Button(imbrow, text="Load Image",
-                                    command=self.load_selected_image)
-            button_load.pack()
-            self.imbrow = imbrow
-            self.imlist = imlist
-            impaths, imshapes = process_path_lists(pathlists)
-            self.impaths = impaths
-            self.imshapes = imshapes
-            imdescs = ["  ".join((impath, str(imshape))) for impath, imshape
-                                            in zip(impaths, imshapes, strict=True)]
-            for imdesc in imdescs:
-                imlist.insert(tk.END, imdesc)
+        try:
+            impaths, imshapes = self.asdf_handler.browse_images(self.entry.get())
+        except Pds9Error as err:
+            messagebox.showerror(err.title, err.message)
+            return
+        imbrow = tk.Toplevel(self.root)
+        imbrow.wm_title("ASDF Image Browser")
+        imlist = tk.Listbox(imbrow, width=60, height=20)
+        imlist.pack(side="top", fill="both", expand=True, padx=10, pady=10)
+        button_load = tk.Button(imbrow, text="Load Image",
+                                command=self.load_selected_image)
+        button_load.pack()
+        self.imbrow = imbrow
+        self.imlist = imlist
+        self.impaths = impaths
+        self.imshapes = imshapes
+        imdescs = ["  ".join((impath, str(imshape))) for impath, imshape
+                                in zip(impaths, imshapes, strict=True)]
+        for imdesc in imdescs:
+            imlist.insert(tk.END, imdesc)
 
     def show_header(self):
         """
@@ -171,10 +117,7 @@ class AsdfEvents:
         Omits attributes, asdf_library and history (virtually useless for most people)
         And for Roman, omits roman.meta.cal_logs (nearly as useless for quick looks)
         """
-        afilename = self.entry.get()
-        # Strip everything after first colon
-        filename = afilename.split(':')[0]
-        # Set default display state if first time
+        filename = self.asdf_handler.split_selection(self.entry.get())[0]
         header_window = tk.Toplevel(self.root)
         if filename not in self.headers:
             self.headers[filename] = ['omit', header_window]
@@ -191,22 +134,18 @@ class AsdfEvents:
             display_option_label = 'omit expanded sections'
         tk.Button(header_window, text=display_option_label,
             command=lambda: self.toggle_display_option(filename)).grid(
-            row=1, column=0, sticky=tk.W, pady=4) 
+            row=1, column=0, sticky=tk.W, pady=4)
         tk.Button(header_window, text="quit", command=header_window.destroy).grid(
             row=2, column=0, sticky=tk.W, pady=4)
-        with asdf.open(filename) as af:
-            tree = af.tree
-            if self.headers[filename][0] == 'omit':
-                omitstr = "OMITTED for BREVITY in ds9 header display"
-                del tree['asdf_library']
-                tree['adsf_library'] = omitstr
-                del tree['history']
-                tree['history'] = omitstr
-                if 'roman' in tree and 'meta' in tree['roman'] and 'cal_logs' in tree['roman']['meta']:
-                    tree['roman']['meta']['cal_logs'] = omitstr
-            lines = display.render_tree(tree, max_rows=None, max_cols=None)
-        text = "\n".join(lines)
-        text = remove_terminal_markup(text)
+        try:
+            text = self.asdf_handler.render_header_text(
+                self.entry.get(),
+                omit=self.headers[filename][0] == 'omit',
+            )
+        except Pds9Error as err:
+            messagebox.showerror(err.title, err.message)
+            header_window.destroy()
+            return
         text_area.insert(tk.END, text)
 
     def toggle_display_option(self, filename):
@@ -219,7 +158,6 @@ class AsdfEvents:
         self.filename = filename
         self.show_header()
 
-
     def header_destroy(self, filename):
         header_window = self.headers[filename][1]
         del self.headers[filename]
@@ -228,7 +166,6 @@ class AsdfEvents:
     def load_selected_image(self):
         impathindex = self.imlist.curselection()[0]
         impath = self.impaths[impathindex]
-        # Construct new file/imagepath string
         filepath = self.entry.get()
         if ":" in filepath:
             filepath = filepath.split(":")[0]
@@ -245,23 +182,14 @@ class AsdfEvents:
 
         If the process no longer exists kill the Python Tkinter windows.
         """
-        # Check to see if the associated ds9 process is still running.
         if not psutil.pid_exists(self.pid):
-            # Shutdown
+            self.asdf_handler.close()
             self.root.destroy()
-        # Check to see if ds9 is asking to raise the ASDF windows to the front.
         if check_for_window_raise():
             raise_all_windows(self.root)
             bring_to_front(self.root)
 
         self.root.after(1000, self.poll_for_ds9_updates)
-
-
-def remove_terminal_markup(text):
-    for i in range(4):
-        text = text.replace(f"\x1b[{i}m", "")
-    return text
-
 
 
 def check_for_window_raise():
@@ -290,7 +218,7 @@ def raise_all_windows(root):
 
 def bring_to_front(window):
     window.attributes("-topmost", True)
-    window.update_idletasks()  # Ensure window is rendered
+    window.update_idletasks()
     window.attributes("-topmost", False)
     window.focus_force()
 

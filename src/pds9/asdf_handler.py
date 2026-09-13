@@ -1,8 +1,9 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 from collections.abc import Collection, Mapping
+from contextlib import redirect_stdout
+from io import StringIO
 
 import asdf
-import asdf._display as display
 import gwcs
 import numpy as np
 from asdf.tags.core.ndarray import NDArrayType
@@ -50,18 +51,17 @@ class AsdfHandler:
         tree = af.tree.copy()
         if omit:
             omitstr = "OMITTED for BREVITY in ds9 header display"
-            del tree["asdf_library"]
-            tree["adsf_library"] = omitstr
-            del tree["history"]
-            tree["history"] = omitstr
-            if "roman" in tree:
-                tree["roman"] = tree["roman"].copy()
-                if "meta" in tree["roman"]:
-                    tree["roman"]["meta"] = tree["roman"]["meta"].copy()
-                    if "cal_logs" in tree["roman"]["meta"]:
-                        tree["roman"]["meta"]["cal_logs"] = omitstr
-        lines = display.render_tree(tree, max_rows=None, max_cols=None)
-        return self._remove_terminal_markup("\n".join(lines))
+            if "asdf_library" in tree:
+                tree["asdf_library"] = omitstr
+            if "history" in tree:
+                tree["history"] = omitstr
+            if "cal_logs" in tree.get("roman", {}).get("meta", {}):
+                tree["roman"]["meta"] = tree["roman"]["meta"].copy()
+                tree["roman"]["meta"]["cal_logs"] = omitstr
+        output = StringIO()
+        with redirect_stdout(output):
+            asdf.info(tree, max_rows=None, max_cols=None)
+        return output.getvalue()
 
     def _current_filename(self):
         return self.filename
@@ -211,8 +211,3 @@ class AsdfHandler:
         if pathlist:
             return pathlist
         return None
-
-    def _remove_terminal_markup(self, text):
-        for i in range(4):
-            text = text.replace(f"\x1b[{i}m", "")
-        return text

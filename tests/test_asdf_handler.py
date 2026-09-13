@@ -157,10 +157,3 @@ def test_render_header_text_returns_rendered_text():
         handler.close()
 
 
-
-def test_remove_terminal_markup_strips_known_escape_sequences():
-    handler = AsdfHandler()
-
-    text = "prefix\x1b[0m mid\x1b[1m more\x1b[2m end\x1b[3m"
-
-    assert handler._remove_terminal_markup(text) == "prefix mid more end"

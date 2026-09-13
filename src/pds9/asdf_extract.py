@@ -2,7 +2,7 @@
 import asdf
 import numpy as np
 
-from asdf.tagged import TaggedDict, TaggedList
+from asdf.tagged import TaggedDict, TaggedList, get_tag
 from asdf.yamlutil import tagged_tree_to_custom_tree
 
 from pds9.asdf_paths import parse_filename
@@ -47,7 +47,8 @@ def extract_asdf_array(tree, apath, ctx):
                 raise AsdfPathError(
                     f"Specified ASDF index component '{value}' not in file"
                 ) from err
-    if not node._tag.startswith("tag:stsci.edu:asdf/core/ndarray-"):  # noqa: SLF001
+    node_tag = get_tag(node)
+    if node_tag is None or not node_tag.startswith("tag:stsci.edu:asdf/core/ndarray-"):
         raise AsdfArrayError("Given ADSF path does not correspond to an array")
     return tagged_tree_to_custom_tree(node, ctx)._make_array()  # noqa: SLF001
 
@@ -112,7 +113,8 @@ def search_tree(tree, ctx, path=None, min_nelements=1000):
         path = []
     pathlist = []
     if isinstance(tree, TaggedDict):
-        if tree._tag.startswith("tag:stsci.edu:asdf/core/ndarray-"):  # noqa: SLF001
+        tree_tag = get_tag(tree)
+        if tree_tag is not None and tree_tag.startswith("tag:stsci.edu:asdf/core/ndarray-"):
             # Convert and check for size
             lazyim = tagged_tree_to_custom_tree(tree, ctx)
             if len(lazyim.shape) < 2:

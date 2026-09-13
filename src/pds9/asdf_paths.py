@@ -19,53 +19,40 @@ def parse_filename(filename):
     Example of a filename input:
     /Users/bozo/data/mydata.asdf:level1.level2[4].image.sci
     """
-    fn, apath = filename.split(":")
-    # Parse asdf path (assumes no use of these special characters as part of
-    # the attrbutes)
-    # Prepend  '.' if it doesn't start with '['
-    if apath[0] != "[":
-        apath = "." + apath
+    fn, apath = filename.split(":", 1)
     alist = []
-    finished = False
-    while not finished:
-        if apath[0] == "[":  # index case
-            endind = apath[1:].find("]")
+    index = 0
+
+    while index < len(apath):
+        if apath[index] == ".":
+            index += 1
+            continue
+
+        if apath[index] == "[":
+            endind = apath.find("]", index + 1)
             if endind < 0:
                 messagebox.showerror("Path Syntax Error",
                     "matching end of index ']' not found")
                 return None
-            indexstr = apath[1:endind+1]
+            indexstr = apath[index + 1:endind]
             try:
-                index = int(indexstr)
+                alist.append(("i", int(indexstr)))
             except ValueError:
                 messagebox.showerror("Path Syntax Error",
                     f"Index must be an integer instead of {indexstr}")
                 return None
-            alist.append(("i", index))
-            apath = apath[endind+2:]
-        elif apath[0] == ".":  # attribute case
-            nextperiod = apath[1:].find(".")
-            nextbracket = apath[1:].find("[")
-            end = len(apath[1:])
-            if nextperiod > 0 and nextbracket > 0:
-                attend = min(nextperiod, nextbracket)
-            elif nextperiod > 0:
-                attend = nextperiod
-            elif nextbracket > 0:
-                attend = nextbracket
-            else:
-                attend = end
-            attr = apath[1:attend+1]
-            apath = apath[attend+1:]
-            if len(apath) == 0:
-                finished = True
-            alist.append(("a", attr))
-        else:
+            index = endind + 1
+            continue
+
+        start = index
+        while index < len(apath) and apath[index] not in ".[":
+            index += 1
+        if start == index:
             messagebox.showerror("Path Syntax Error",
                 "Expected path delimiters: '.'' or '[' not found")
             return None
-        if len(apath) == 0:
-            finished = True
+        alist.append(("a", apath[start:index]))
+
     return fn, alist
 
 
@@ -75,12 +62,9 @@ def process_path_lists(pathlists):
     Generate a simple list of text paths useful for ds9 and a corresponding
     list of image info as single strings.
     """
-    paths = []
-    shapes = []
-    for item in pathlists:
-        path, imshape = convert_path_list(item)
-        paths.append(path)
-        shapes.append(imshape)
+    converted = [convert_path_list(item) for item in pathlists]
+    paths = [path for path, _shape in converted]
+    shapes = [shape for _path, shape in converted]
     return paths, shapes
 
 
@@ -92,13 +76,9 @@ def convert_path_list(pathlist):
     """
     plist = pathlist["path"]
     iminfo = pathlist["iminfo"]
-    path = ""
-    for item in plist:
-        if type(item) is int:
-            path += f"[{item}]"
-        elif not path:
-            path += item
-        else:
-            path += f".{item}"
+    path = "".join(
+        f"[{item}]" if isinstance(item, int) else item if index == 0 else f".{item}"
+        for index, item in enumerate(plist)
+    )
     imshape = str(iminfo[1])
     return path, imshape

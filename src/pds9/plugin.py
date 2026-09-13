@@ -373,7 +373,7 @@ def convert_path_list(pathlist):
     for item in plist:
         if type(item) is int:
             path += f"[{item}]"
-        elif not path or path[-1] == "]":
+        elif not path:
             path += item
         else:
             path += f".{item}"

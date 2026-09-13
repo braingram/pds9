@@ -45,7 +45,7 @@ docs = [
   "sphinx-inline-tabs",
   "matplotlib",
 ]
-test = ["ci-watson>=0.3.0", "pytest>=9.0", "pytest-astropy>=0.11.0"]
+test = ["pytest>=9.0"]
 
 [project.scripts]
 pds9-config = "pds9.cli:main"
@@ -71,8 +71,8 @@ pds9 = ["ds9.ini"]
 
 [tool.pytest.ini_options]
 minversion = "9.0"
-doctest_plus = "enabled"
 log_cli_level = "INFO"
+testpaths = ["tests"]
 xfail_strict = true
 addopts = [
   "-ra",
@@ -85,8 +85,7 @@ addopts = [
 norecursedirs = ["build", "docs/_build", ".tox"]
 filterwarnings = [
   "error",
-  "ignore:Models in math_functions:astropy.utils.exceptions.AstropyUserWarning",
-  "ignore:numpy.ndarray size changed:RuntimeWarning",
+  "ignore:astropy.samp was deprecated in version 8.0 and will be removed in a future version; please use pyvo.samp instead.:astropy.utils.exceptions.AstropyDeprecationWarning",
 ]
 
 [tool.coverage.report]

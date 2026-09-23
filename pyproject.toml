@@ -44,6 +44,7 @@ test = ["ci-watson>=0.3.0", "pytest>=9.0", "pytest-astropy>=0.11.0"]
 
 [project.scripts]
 pds9-config = "pds9:cli.main"
+pds9 = "pds9.alias:main"
 
 [build-system]
 requires = ["setuptools >= 77.0.3", "setuptools_scm"]
